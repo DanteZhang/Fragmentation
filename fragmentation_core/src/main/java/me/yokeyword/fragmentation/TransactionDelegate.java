@@ -42,6 +42,8 @@ class TransactionDelegate {
     static final String FRAGMENTATION_STATE_SAVE_ANIMATOR = "fragmentation_state_save_animator";
     static final String FRAGMENTATION_STATE_SAVE_IS_HIDDEN = "fragmentation_state_save_status";
 
+    private static final String FRAGMENTATION_STATE_SAVE_RESULT = "fragmentation_state_save_result";
+
     static final int TYPE_ADD = 0;
     static final int TYPE_ADD_WITH_POP = 1;
     static final int TYPE_ADD_RESULT = 2;
@@ -104,6 +106,10 @@ class TransactionDelegate {
 
         checkNotNull(to, "toFragment == null");
 
+        if ((type == TYPE_ADD_RESULT || type == TYPE_ADD_RESULT_WITHOUT_HIDE) && from != null) {
+            saveRequestCode(fragmentManager, (Fragment) from, (Fragment) to, requestCode);
+        }
+
         if (from != null) {
             if (from.getSupportDelegate().mContainerId == 0) {
                 Fragment fromF = (Fragment) from;
@@ -130,10 +136,6 @@ class TransactionDelegate {
                 // Compat SharedElement
                 FragmentationHack.reorderIndices(fragmentManager);
             }
-        }
-
-        if (type == TYPE_ADD_RESULT || type == TYPE_ADD_RESULT_WITHOUT_HIDE) {
-            saveRequestCode((Fragment) to, requestCode);
         }
 
         if (handleLaunchMode(fragmentManager, from, to, toFragmentTag, launchMode)) return;
@@ -368,16 +370,17 @@ class TransactionDelegate {
     /**
      * save requestCode
      */
-    private void saveRequestCode(Fragment to, int requestCode) {
+    private void saveRequestCode(FragmentManager fm, Fragment from, Fragment to, int requestCode) {
         Bundle bundle = getArguments(to);
         ResultRecord resultRecord = new ResultRecord();
         resultRecord.requestCode = requestCode;
         bundle.putParcelable(FRAGMENTATION_ARG_RESULT_RECORD, resultRecord);
+        fm.putFragment(bundle, FRAGMENTATION_STATE_SAVE_RESULT, from);
     }
 
     void handleResultRecord(Fragment from) {
-        final ISupportFragment preFragment = getPreFragment(from);
-        if (preFragment == null) return;
+        final ISupportFragment targetFragment = (ISupportFragment) from.getFragmentManager().getFragment(from.getArguments(), FRAGMENTATION_STATE_SAVE_RESULT);
+        if (targetFragment == null) return;
 
         Bundle args = from.getArguments();
         if (args == null || !args.containsKey(FRAGMENTATION_ARG_RESULT_RECORD)) return;
@@ -388,7 +391,7 @@ class TransactionDelegate {
         mHandler.post(new Runnable() {
             @Override
             public void run() {
-                preFragment.onFragmentResult(resultRecord.requestCode, resultRecord.resultCode, resultRecord.resultBundle);
+                targetFragment.onFragmentResult(resultRecord.requestCode, resultRecord.resultCode, resultRecord.resultBundle);
             }
         });
     }
